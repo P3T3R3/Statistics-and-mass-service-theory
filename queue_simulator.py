@@ -43,43 +43,33 @@ class Simulation:
 
 
     # --- FUNKCJE GENERUJĄCE ZMIENNE LOSOWE ---
-    def generate_arrival_time(self):
+    def generate_arrival_time(self, mean=2.0, std=0.5, min_time=0.5):
         # Czas między przyjściami klientów
-        # Rozkład normalny z ucięciem od dołu, żeby nie było zbyt krótkich czasów (np. < 0.5 min)
-        # Średnio co 2 minuty, odchylenie 0.5
-        return max(0.5, np.random.normal(loc=2.0, scale=0.5))
+        return max(min_time, np.random.normal(loc=mean, scale=std))
 
-    def generate_service_time(self):
+    def generate_service_time(self, normal_mean=3.0, slow_mean_first=6.0, slow_mean_next=4.0, std=2, min_time=1.0, max_time=8.0):
         # Czas obsługi klienta - rozkład normalny z ograniczeniem
-        # Kasjerzy są wolniejsi po zmianie przez pierwsze 3 klientów
-        # Pierwszy klient po zmianie – średnio 6 minut
-        # W pozostałych przypadkach średnio 3 minuty
-        # Odchylenie standardowe 0.8, ograniczenie do zakresu 1–8 minut
-
         if self.shift_effect_counter > 0:
             print(f"{Colors.MAGENTA}[{self.current_time:.2f}] Slower service due to cashier adjustment (client #{self.next_customer_id}){Colors.RESET}")
             if self.shift_effect_counter == 3:
-                mean = 6.0  # pierwszy klient po zmianie – mocne spowolnienie
+                mean = slow_mean_first  # pierwszy klient po zmianie – mocne spowolnienie
             else:
-                mean = 4.0  # kolejni dwaj – lekkie spowolnienie
+                mean = slow_mean_next  # kolejni dwaj – lekkie spowolnienie
             self.shift_effect_counter -= 1
         else:
-            mean = 3.0
+            mean = normal_mean
 
-        std = 2
         base = np.random.normal(loc=mean, scale=std)
-        return min(max(base, 1.0), 8.0)
+        return min(max(base, min_time), max_time)
 
-    def generate_failure_time(self):
+    def generate_failure_time(self, shape=3.0, scale=120.0):
         # Czas do następnej awarii - rozkład gamma
-        # Gamma daje większą kontrolę nad losowością niż wykładniczy
-        return np.random.gamma(shape=3.0, scale=120.0) #średnio co 4 godziny
+        return np.random.gamma(shape=shape, scale=scale)
 
-    def generate_failure_duration(self):
-        # Czas trwania awarii - rozkład beta przeskalowany do 5-20 min
-        # Beta(2,5) preferuje krótsze awarie, ale dopuszcza dłuższe
-        base = np.random.beta(2.0, 5.0)
-        return 5.0 + base * (20.0 - 5.0)
+    def generate_failure_duration(self, alpha=2.0, beta=5.0, min_time=5.0, max_time=20.0):
+        # Czas trwania awarii - rozkład beta przeskalowany do min_time-max_time
+        base = np.random.beta(alpha, beta)
+        return min_time + base * (max_time - min_time)
 
     # --- PLANOWANIE ZDARZEŃ ---
     def schedule_event(self, time, event_type, data=None):
