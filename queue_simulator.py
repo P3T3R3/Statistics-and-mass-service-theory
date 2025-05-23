@@ -24,7 +24,7 @@ class SimParams:
                  mean_service_time=3.0, slow_mean_service_time_first=6.0, slow_mean_service_time_next=4.0,
                  std_service_time=2.0, min_service_time=1.0, max_service_time=8.0,
                  failure_shape=3.0, failure_scale=120.0, failure_alpha=2.0, failure_beta=5.0,
-                 failure_min_time=5.0, failure_max_time=20.0):
+                 failure_min_time=5.0, failure_max_time=20.0, expected_arrival=2.0, expected_service=3.0, expected_failure_time=120.0, expected_failure_duration=10.0):
         self.mean_arrival_time = mean_arrival_time
         self.std_arrival_time = std_arrival_time
         self.min_arrival_time = min_arrival_time
@@ -40,6 +40,11 @@ class SimParams:
         self.failure_beta = failure_beta
         self.failure_min_time = failure_min_time
         self.failure_max_time = failure_max_time
+        # Wirtualne parametry
+        self.expected_arrival = expected_arrival
+        self.expected_service = expected_service
+        self.expected_failure_time = expected_failure_time
+        self.expected_failure_duration = expected_failure_duration
 
 class Simulation:
     def __init__(self, simulation_time, params=SimParams()):
@@ -214,7 +219,7 @@ class Simulation:
 
         param_list = vars(self.params)
 
-        return [self.served_customers, self.lost_customers, self.unserved_due_to_timeout, self.failure_count, avg_service_time, avg_failure_duration] + list(param_list.values())
+        return [self.served_customers, self.lost_customers, self.unserved_due_to_timeout, self.failure_count, avg_service_time, avg_failure_duration] + [self.params.expected_arrival, self.params.expected_service, self.params.expected_failure_time, self.params.expected_failure_duration]
     
     def show_system_status(self):
         queue_visual = "🧍 x " + str(len(self.queue))
@@ -228,8 +233,7 @@ class Simulation:
 def run_multiple_simulations(list_of_simulations, simulation_time=480, output_file="simulation_results.csv"):
     headers = ["Simulation Number", "Served Customers", "Lost Customers", "Unserved at Timeout", "Failure Count", "Avg Service Time (min)", "Avg Failure Duration (min)"]
     # dodaj do headerów parametry symulacji
-    for param in vars(SimParams()).keys():
-        headers.append(param)
+    headers += ["expected_arrival", "expected_service", "expected_failure_time", "expected_failure_duration"]
 
     with open(output_file, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -237,38 +241,114 @@ def run_multiple_simulations(list_of_simulations, simulation_time=480, output_fi
 
         for i in range(len(list_of_simulations)):
             print(f"---- Running simulation {i+1}/{len(list_of_simulations)} ----")
+            print(f"Parameters: {vars(list_of_simulations[i])}")
             sim = Simulation(simulation_time, params=list_of_simulations[i])
             results = sim.run()
             writer.writerow([i+1] + results)
 
-list_of_simulations = [
-    SimParams(),
-    SimParams(mean_arrival_time=1.5, std_arrival_time=0.3, min_arrival_time=0.3),
-    SimParams(mean_service_time=2.5, slow_mean_service_time_first=5.0, slow_mean_service_time_next=3.5,
-              std_service_time=1.5, min_service_time=0.8, max_service_time=7.0),
-    SimParams(failure_shape=2.5, failure_scale=100.0),
-    SimParams(failure_alpha=1.8, failure_beta=4.5, failure_min_time=4.0, failure_max_time=18.0),
-    SimParams(mean_arrival_time=2.2, std_arrival_time=0.6, min_arrival_time=0.6),
-    SimParams(mean_service_time=3.2, slow_mean_service_time_first=6.5, slow_mean_service_time_next=4.5,
-              std_service_time=2.2, min_service_time=1.2, max_service_time=9.0),
-    SimParams(failure_shape=3.2, failure_scale=130.0),
-    SimParams(failure_alpha=2.2, failure_beta=5.5, failure_min_time=6.0, failure_max_time=22.0),
-    SimParams(mean_arrival_time=1.8, std_arrival_time=0.4, min_arrival_time=0.4),
-    SimParams(mean_arrival_time=1.6, std_arrival_time=0.2, min_arrival_time=0.2),
-    SimParams(mean_service_time=3.0, slow_mean_service_time_first=7.0, slow_mean_service_time_next=5.0,
-              std_service_time=2.0, min_service_time=1.0, max_service_time=10.0),
-    SimParams(failure_shape=2.8, failure_scale=110.0),
-    SimParams(failure_alpha=2.0, failure_beta=5.0, failure_min_time=5.0, failure_max_time=20.0),
-    SimParams(mean_arrival_time=2.0, std_arrival_time=0.5, min_arrival_time=0.5),
-    SimParams(mean_service_time=3.5, slow_mean_service_time_first=6.0, slow_mean_service_time_next=4.0,
-              std_service_time=1.8, min_service_time=1.0, max_service_time=8.5),
-    SimParams(failure_shape=3.0, failure_scale=120.0),
-    SimParams(failure_alpha=2.5, failure_beta=6.0, failure_min_time=7.0, failure_max_time=25.0),
-    SimParams(mean_arrival_time=1.7, std_arrival_time=0.3, min_arrival_time=0.3),
-    SimParams(mean_service_time=2.8, slow_mean_service_time_first=5.5, slow_mean_service_time_next=3.8,
-              std_service_time=1.6, min_service_time=0.9, max_service_time=7.5)
-]
+#uproszczenie do 4 parametrów
+def create_sim_params(expected_arrival, expected_service, expected_failure_time, expected_failure_duration):
+    mean_arrival_time = expected_arrival
+    std_arrival_time = 0.5
+    min_arrival_time = 0.5
+
+    mean_service_time = expected_service * (4 / 5.6)
+    slow_mean_service_time_first = mean_service_time * 2
+    slow_mean_service_time_next = mean_service_time * 1.3
+    std_service_time = 0.5
+    min_service_time = 0.8
+    max_service_time = 8.0
+
+    failure_shape = 3.0
+    failure_scale = expected_failure_time
+
+    failure_min_time = 5.0
+    failure_max_time = 20.0
+    # solve for beta:
+    r = (expected_failure_duration - failure_min_time) / (failure_max_time - failure_min_time)
+    failure_alpha = 2.0
+    failure_beta = (failure_alpha * (1 - r)) / r
+
+    return SimParams(
+        mean_arrival_time=mean_arrival_time,
+        std_arrival_time=std_arrival_time,
+        min_arrival_time=min_arrival_time,
+        mean_service_time=mean_service_time,
+        slow_mean_service_time_first=slow_mean_service_time_first,
+        slow_mean_service_time_next=slow_mean_service_time_next,
+        std_service_time=std_service_time,
+        min_service_time=min_service_time,
+        max_service_time=max_service_time,
+        failure_shape=failure_shape,
+        failure_scale=failure_scale,
+        failure_alpha=failure_alpha,
+        failure_beta=failure_beta,
+        failure_min_time=failure_min_time,
+        failure_max_time=failure_max_time,
+        # Wirtualne parametry
+        expected_arrival=expected_arrival,
+        expected_service=expected_service,
+        expected_failure_time=expected_failure_time,
+        expected_failure_duration=expected_failure_duration
+    )
+
+import random
+
+def generate_varied_simulations(n=100):
+    simulations = []
+
+    for i in range(n):
+        # Losowa decyzja: ile parametrów zmienić (1 do 4)
+        num_to_change = random.choices([1, 2, 3, 4], weights=[0.4, 0.3, 0.2, 0.1])[0]
+
+        # Startowe wartości bazowe
+        base = {
+            "expected_arrival": 2.0,
+            "expected_service": 3.0,
+            "expected_failure_time": 120.0,
+            "expected_failure_duration": 10.0
+        }
+
+        keys = random.sample(list(base.keys()), k=num_to_change)
+        for key in keys:
+            if key == "expected_arrival":
+                base[key] = round(random.uniform(1.2, 3.0) * 5,0) / 5  # min_arrival_time = 0.5
+            elif key == "expected_service":
+                base[key] = round(random.uniform(2.0, 5.0) * 2,0) / 2  # obsługa nie może być ujemna, ograniczona
+            elif key == "expected_failure_time":
+                base[key] = round(random.uniform(80.0, 200.0) * 2,0) / 2  # gamma shape x scale
+            elif key == "expected_failure_duration":
+                base[key] = round(random.uniform(5.1, 19.9) * 2,0) / 2  # min > 5, max < 20
+
+        simulations.append(create_sim_params(
+            expected_arrival=base["expected_arrival"],
+            expected_service=base["expected_service"],
+            expected_failure_time=base["expected_failure_time"],
+            expected_failure_duration=base["expected_failure_duration"]
+        ))
+
+    return simulations
+
+
+list_of_simulations = generate_varied_simulations(n=100)
 
 # Uruchomienie symulacji
-run_multiple_simulations(list_of_simulations)
+#run_multiple_simulations(list_of_simulations)
+
+
+list_of_same_simulations = []
+for i in range(50):
+    list_of_same_simulations.append(create_sim_params(
+        expected_arrival=2.0,
+        expected_service=3.0,
+        expected_failure_time=120.0,
+        expected_failure_duration=10.0
+    ))
+    list_of_same_simulations.append(create_sim_params(
+        expected_arrival=2.0,
+        expected_service=4.0,
+        expected_failure_time=120.0,
+        expected_failure_duration=10.0
+    ))
+run_multiple_simulations(list_of_same_simulations, simulation_time=480, output_file="simulation_results_same.csv")
 
